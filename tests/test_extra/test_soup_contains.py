@@ -289,6 +289,12 @@ class TestSoupContains(util.TestCase):
             flags=util.XML
         )
 
+    def test_contains_unclosed_quote(self):
+        """Test contains with an unclosed quote fails for syntax error, not timeout error."""
+
+        self.assert_raises_before_timeout('span:-soup-contains("' + ('x' * 300))
+        self.assert_raises_before_timeout("span:-soup-contains-own('" + ('x' * 300))
+
     def test_contains_warn(self):
         """Test old alias raises a warning."""
 

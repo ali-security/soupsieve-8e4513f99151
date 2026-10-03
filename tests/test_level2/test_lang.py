@@ -34,6 +34,11 @@ class TestLang(util.TestCase):
             flags=util.HTML
         )
 
+    def test_lang_unclosed_quote(self):
+        """Test language with an unclosed quote fails for syntax error, not timeout error."""
+
+        self.assert_raises_before_timeout('p:lang("' + ('x' * 300))
+
     def test_iframe(self):
         """Test language in `iframe`."""
 

@@ -1,4 +1,7 @@
 """Test utilities."""
+import os
+import subprocess
+import sys
 import unittest
 import bs4
 import textwrap
@@ -102,6 +105,41 @@ class TestCase(unittest.TestCase):
         print('----Running Assert Test----')
         with self.assertRaises(exception):
             self.compile_pattern(pattern, namespaces=namespace, custom=custom)
+
+    def assert_raises_before_timeout(self, pattern, timeout=30):
+        """Assert pattern fails with a syntax error and does not time out.
+
+        Compilation runs in a separate process so that a pattern which causes catastrophic
+        backtracking can be killed on every platform (`signal.alarm` does not exist on Windows
+        and cannot interrupt the regular expression engine on older Python versions).
+        """
+
+        print('----Running Assert Timeout Test----')
+        script = textwrap.dedent(
+            """
+            import sys
+            sys.path.insert(0, sys.argv[1])
+            import soupsieve as sv
+            pattern = sys.stdin.buffer.read().decode('utf-8')
+            try:
+                sv.compile(pattern)
+            except sv.SelectorSyntaxError:
+                sys.exit(0)
+            sys.exit('SelectorSyntaxError was not raised')
+            """
+        )
+        path = os.path.dirname(os.path.dirname(os.path.abspath(sv.__file__)))
+        try:
+            proc = subprocess.run(
+                [sys.executable, '-c', script, path],
+                input=pattern.encode('utf-8'),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout
+            )
+        except subprocess.TimeoutExpired:
+            self.fail('Compiling {!r} did not complete within {} seconds'.format(pattern, timeout))
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode('utf-8', 'replace'))
 
     def assert_selector(self, markup, selectors, expected_ids, namespaces={}, custom=None, flags=0):
         """Assert selector."""
