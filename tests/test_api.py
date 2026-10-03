@@ -590,6 +590,73 @@ class TestInvalid(util.TestCase):
         with self.assertRaises(TypeError):
             sv.filter('div', "not a tag", flags=flags)
 
+    def test_excessive_selectors(self):
+        """Test excessive selectors."""
+
+        # Build a selector string: "a,a,a,...,a" (10,000 items)
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(selector)
+
+    def test_excessive_custom_selectors(self):
+        """Test excessive custom selectors."""
+
+        # Build a selector string: "a,a,a,...,a" (10,000 items)
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile('div:--custom', custom={':--custom': selector})
+
+    def test_excessive_custom_and_normal_selectors(self):
+        """Test excessive custom and normal selectors."""
+
+        count = 5000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(':is({}):--custom'.format(selector), custom={':--custom': selector})
+
+    def test_excessive_nested_custom_selectors(self):
+        """Test custom selectors that exponentially expand by referencing each other."""
+
+        # Each level references the previous level twice, so the effective
+        # number of selectors doubles with every level while the pattern stays tiny.
+        custom = {':--l0': 'a, b'}
+        for level in range(1, 16):
+            custom[':--l{}'.format(level)] = ':--l{0}, :--l{0}'.format(level - 1)
+
+        with self.assertRaises(ValueError):
+            sv.compile(':--l15', custom=custom)
+
+    def test_excessive_predefined_selectors(self):
+        """Test that pre-defined selectors contribute towards the selector limit."""
+
+        # Pre-defined pseudo-classes are defined as a series of other selectors.
+        # A relatively short pattern can expand into a massive selector.
+        with self.assertRaises(ValueError):
+            sv.compile('input' + ':read-only' * 1000)
+
+        # `:nth-child()` without `of S` uses the default `*|*` selector list.
+        with self.assertRaises(ValueError):
+            sv.compile('div' + ':nth-child(2)' * 5000)
+
+    def test_selector_limit_boundary(self):
+        """Test that selectors at the limit are allowed and selectors past it are not."""
+
+        selector = ",".join("a" for _ in range(sv.cp.SELECTOR_LIMIT))
+        pattern = sv.compile(selector)
+        self.assertEqual(len(pattern.selectors), sv.cp.SELECTOR_LIMIT)
+        self.assertEqual(pattern.selectors.count, sv.cp.SELECTOR_LIMIT)
+
+        with self.assertRaises(ValueError):
+            sv.compile(selector + ',a')
+
 
 class TestSyntaxErrorReporting(util.TestCase):
     """Test reporting of syntax errors."""
